@@ -1,0 +1,79 @@
+# Load libraries
+library(readxl)
+library(dplyr)
+library(broom)
+
+# Step 1: Load and filter for MACS (gender == 1)
+df <- read_excel("C:/Users/USER/Desktop/Projects/ASCVD/Mateo Dataset/Fourth set of analysis/Mateo_GLI modified.xlsx")
+
+df <- df %>%
+  filter(gender == 1) %>%
+  mutate(
+    dlcoctgr = case_when(
+      dlcoctgr %in% c("Normal", "normal") ~ "Normal",
+      dlcoctgr == "Mild Impairment" ~ "Mild Impairment",
+      dlcoctgr == "Moderate/Severe Impairment" ~ "Moderate/Severe Impairment",
+      TRUE ~ NA_character_
+    ),
+    dlcoctgr = factor(dlcoctgr, levels = c("Normal", "Mild Impairment", "Moderate/Severe Impairment")),
+    CD4N_log = log2(CD4N + 1),
+    VLOAD_log = log10(VLOAD + 1),
+    INCOME = as.numeric(as.factor(INCOME)),
+    BSEDUCTN = as.numeric(as.factor(BSEDUCTN)),
+    hcv = as.numeric(as.factor(hcv)),
+    BSCOCUSE = as.numeric(as.factor(BSCOCUSE)),
+    HAARTV2 = as.numeric(as.factor(HAARTV2))
+  )
+
+# Step 2: Check model validity
+is_valid_group <- function(data) {
+  all(c(
+    n_distinct(data$dlcoctgr, na.rm = TRUE) > 1,
+    n_distinct(data$INCOME, na.rm = TRUE) > 1,
+    n_distinct(data$BSEDUCTN, na.rm = TRUE) > 1,
+    n_distinct(data$hcv, na.rm = TRUE) > 1,
+    n_distinct(data$BSCOCUSE, na.rm = TRUE) > 1,
+    n_distinct(data$HAARTV2, na.rm = TRUE) > 1
+  ))
+}
+
+# Step 3: Run models stratified by HIV
+risk_models <- c("ascvdrisk", "preventascvd", "preventcvd", "preventhf")
+
+results <- lapply(risk_models, function(model) {
+  formula <- as.formula(paste(model, "~ dlcoctgr + CD4N_log + VLOAD_log + INCOME + BSEDUCTN + hcv + BSCOCUSE + HAARTV2"))
+  
+  df %>%
+    group_by(hiv) %>%
+    group_modify(~ {
+      if (is_valid_group(.x)) {
+        lm(formula, data = .x) %>%
+          tidy(conf.int = TRUE) %>%
+          filter(grepl("dlcoctgr", term)) %>%
+          mutate(model = model, hiv = unique(.x$hiv))
+      } else {
+        tibble()
+      }
+    })
+}) %>% bind_rows()
+
+# Step 4: Format summary table
+if (nrow(results) > 0 && "term" %in% names(results)) {
+  summary_table_dlco <- results %>%
+    mutate(
+      term = recode(term,
+                    "dlcoctgrMild Impairment" = "Mild vs Normal",
+                    "dlcoctgrModerate/Severe Impairment" = "Moderate/Severe vs Normal"
+      ),
+      hiv = factor(hiv, levels = c(0, 1), labels = c("HIV-", "HIV+")),
+      beta = round(estimate, 3),
+      CI = paste0("[", round(conf.low, 3), ", ", round(conf.high, 3), "]"),
+      pval = signif(p.value, 3)
+    ) %>%
+    select(Model = model, `HIV Status` = hiv, `DLCO Category` = term, Beta = beta, `95% CI` = CI, `P-value` = pval)
+  
+  print(summary_table_dlco)
+} else {
+  print("No valid results — check dlcoctgr and covariate diversity in each HIV group.")
+}
+
