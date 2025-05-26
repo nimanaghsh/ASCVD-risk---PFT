@@ -73,3 +73,5 @@ if (nrow(results) > 0 && "term" %in% names(results)) {
   print("No valid results — check globalctgr and covariate diversity in each HIV group.")
 }
 
+*** This code was used for Gender = 1 (MACS participants). For Gender = 2 (WIHS participants), simply substitute gender = 2 in the code.
+*** The forest plot was generated manually using the beta coefficients, 95% confidence intervals, and p-values obtained from the regression output.
