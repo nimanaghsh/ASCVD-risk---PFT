@@ -1,0 +1,70 @@
+# Preprocess data (new log2 for VLOAD)
+df_hiv1 <- df %>%
+  filter(hiv == 1, CD4N > 0, VLOAD > 0) %>%  # Also filter VLOAD > 0
+  mutate(
+    gender = factor(gender, labels = c("MACS", "WIHS")),
+    CD4N_log2 = log2(CD4N + 1),
+    VLOAD_log2 = log2(VLOAD + 1),  # log2 now
+    INCOME = as.numeric(as.factor(INCOME)),
+    BSEDUCTN = as.numeric(as.factor(BSEDUCTN)),
+    hcv = as.numeric(as.factor(hcv)),
+    BSCOCUSE = as.numeric(as.factor(BSCOCUSE)),
+    HAARTV2 = as.numeric(as.factor(HAARTV2))
+  ) %>%
+  drop_na(VLOAD_log2, gender, INCOME, BSEDUCTN, hcv, BSCOCUSE, HAARTV2,
+          ascvdrisk, preventascvd, preventcvd, preventhf)
+
+# Update outcomes and storage
+risk_models <- c("ascvdrisk", "preventascvd", "preventcvd", "preventhf")
+plot_data_vload <- data.frame()
+beta_summary_vload <- data.frame()
+
+# Loop over models
+for (outcome in risk_models) {
+  # MACS
+  macs <- df_hiv1 %>% filter(gender == "MACS")
+  macs_model <- lm(as.formula(paste(outcome, "~ VLOAD_log2 + CD4N_log2 + INCOME + BSEDUCTN + hcv + BSCOCUSE + HAARTV2")), data = macs)
+  macs_df <- macs %>% mutate(predicted = predict(macs_model), outcome = outcome, group = "MACS")
+  macs_beta <- tidy(macs_model) %>%
+    filter(term == "VLOAD_log2") %>%
+    mutate(outcome = outcome, group = "MACS")
+  
+  # WIHS
+  wihs <- df_hiv1 %>% filter(gender == "WIHS")
+  wihs_model <- lm(as.formula(paste(outcome, "~ VLOAD_log2 + CD4N_log2 + INCOME + BSEDUCTN + hcv + BSCOCUSE + HAARTV2")), data = wihs)
+  wihs_df <- wihs %>% mutate(predicted = predict(wihs_model), outcome = outcome, group = "WIHS")
+  wihs_beta <- tidy(wihs_model) %>%
+    filter(term == "VLOAD_log2") %>%
+    mutate(outcome = outcome, group = "WIHS")
+  
+  # All
+  all_model <- lm(as.formula(paste(outcome, "~ VLOAD_log2 + CD4N_log2 + INCOME + BSEDUCTN + hcv + BSCOCUSE + HAARTV2")), data = df_hiv1)
+  all_df <- df_hiv1 %>% mutate(predicted = predict(all_model), outcome = outcome, group = "All")
+  all_beta <- tidy(all_model) %>%
+    filter(term == "VLOAD_log2") %>%
+    mutate(outcome = outcome, group = "All")
+  
+  # Combine results
+  plot_data_vload <- bind_rows(plot_data_vload, macs_df, wihs_df, all_df)
+  beta_summary_vload <- bind_rows(beta_summary_vload, macs_beta, wihs_beta, all_beta)
+}
+
+# Final plot
+ggplot(plot_data_vload, aes(x = VLOAD_log2, y = predicted, color = group)) +
+  geom_point(alpha = 0.3, size = 0.2) +
+  stat_smooth(method = "lm", se = FALSE, linewidth = 0.5, formula = y ~ x) +
+  facet_wrap(~ outcome, scales = "free_y",
+             labeller = labeller(outcome = c(
+               ascvdrisk = "10-year ASCVD Risk",
+               preventascvd = "PREVENT ASCVD",
+               preventcvd = "PREVENT CVD",
+               preventhf = "PREVENT HF"
+             ))) +
+  scale_color_manual(values = c("MACS" = "#9B59B6", "WIHS" = "#E91E63", "All" = "#00BCD4")) +
+  labs(
+    title = "Adjusted Linear Regression Model Between Normalized Viral Load and CVD Risk Models",
+    x = "Normalized Viral Load",
+    y = "Risk Score",
+    color = "Group"
+  ) +
+  theme_minimal()
