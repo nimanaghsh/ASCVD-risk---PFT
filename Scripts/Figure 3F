@@ -1,0 +1,57 @@
+# Calculate time difference from FAIDSD to VISDATE
+df_aids <- df %>%
+  mutate(
+    VISDATE = suppressWarnings(mdy(VISDATE)),
+    FAIDSD = suppressWarnings(mdy(FAIDSD))
+  ) %>%
+  filter(!is.na(FAIDSD), !FAIDSD %in% ymd("2100-01-01")) %>%
+  mutate(
+    time_from_aids_years = as.numeric(difftime(VISDATE, FAIDSD, units = "days")) / 365.25,
+    CD4N_log = log2(CD4N + 1),
+    VLOAD_log = log10(VLOAD + 1),
+    INCOME = as.numeric(as.factor(INCOME)),
+    BSEDUCTN = as.numeric(as.factor(BSEDUCTN)),
+    hcv = as.numeric(as.factor(hcv)),
+    BSCOCUSE = as.numeric(as.factor(BSCOCUSE)),
+    HAARTV2 = as.numeric(as.factor(HAARTV2))
+  )
+
+# Fit adjusted models for time_from_aids_years
+lm_faids_models <- lapply(cvd_models, function(model) {
+  lm(as.formula(paste(
+    model, "~ time_from_aids_years + CD4N_log + VLOAD_log + INCOME + BSEDUCTN + hcv + BSCOCUSE + HAARTV2"
+  )), data = df_aids)
+})
+
+# Extract p-values and format
+faids_pvals <- map_dbl(lm_faids_models, ~ coef(summary(.))["time_from_aids_years", "Pr(>|t|)"])
+faids_labels <- paste0("p = ", signif(faids_pvals, 3))
+
+# Define Y-axis labels
+y_labels <- c("10-year ASCVD Risk", "PREVENT ASCVD", "PREVENT CVD", "PREVENT HF")
+# Define new sequential color set
+colors <- c("steelblue1", "steelblue2", "steelblue3", "steelblue4")
+
+
+# Generate plots
+faids_plots <- pmap(
+  list(lm_faids_models, cvd_models, faids_labels, colors, y_labels),
+  function(model, model_label, pval_text, line_color, y_lab) {
+    model_data <- model.frame(model)
+    
+    ggplot(model_data, aes(x = time_from_aids_years, y = get(model_label))) +
+      geom_point(color = "black", size = 0.3, alpha = 0.3) +
+      geom_smooth(method = "lm", se = TRUE, color = line_color) +
+      annotate("text", x = Inf, y = Inf, label = pval_text, hjust = 1.1, vjust = 1.3, size = 3.5, fontface = "italic") +
+      labs(
+        x = "Years From AIDS Diagnosis to Study Visit",
+        y = y_lab
+      ) +
+      theme_minimal(base_size = 8) +
+      theme(plot.title = element_blank())
+  }
+)
+
+# Plot in grid
+grid.arrange(grobs = faids_plots, ncol = 2)
+
