@@ -1,0 +1,36 @@
+library(ggplot2)
+library(dplyr)
+library(ggsignif)
+
+# Calculate p-values manually
+p_values <- df_ort %>%
+  group_by(Model) %>%
+  summarise(p = wilcox.test(Risk ~ ORT)$p.value) %>%
+  mutate(label = paste0("P = ", formatC(p, digits = 3, format = "f")))
+
+# Merge with label position info (optional: adjust y position if needed)
+y_max <- df_ort %>%
+  group_by(Model) %>%
+  summarise(y = max(Risk, na.rm = TRUE) * 1.05)
+
+p_data <- left_join(p_values, y_max, by = "Model")
+
+# Plot
+ggplot(df_ort, aes(x = ORT, y = Risk, color = ORT)) +
+  geom_jitter(position = position_jitter(width = 0.2), alpha = 0.4, size = 0.3) +
+  geom_boxplot(outlier.shape = NA, width = 0.3, fill = NA) +
+  geom_text(data = p_data, aes(x = 1.5, y = y, label = label), inherit.aes = FALSE, size = 3.5) +
+  facet_wrap(~ Model, labeller = labeller(Model = model_labels), scales = "free_y") +
+  scale_color_manual(values = c("No" = "deepskyblue3", "Yes" = "deepskyblue4")) +
+  labs(
+    title = "CVD Risk Models by Using Anti-retroviral Drugs",
+    x = "Using Anti-retroviral Drugs At the Time of the Interview ",
+    y = "Risk Score",
+    color = "ORT"
+  ) +
+  theme_minimal() +
+  theme(
+    strip.text = element_text(face = "bold", size = 10),
+    axis.text = element_text(size = 10),
+    legend.position = "none"
+  )
