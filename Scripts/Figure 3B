@@ -68,3 +68,6 @@ ggplot(plot_data_vload, aes(x = VLOAD_log2, y = predicted, color = group)) +
     color = "Group"
   ) +
   theme_minimal()
+
+
+**** P-values calculated separately and manually added to the graphs ****
