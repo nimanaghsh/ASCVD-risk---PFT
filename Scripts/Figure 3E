@@ -1,0 +1,81 @@
+# Create adjustment variables
+df_haart <- df_haart %>%
+  mutate(
+    CD4N_log = log2(CD4N + 1),
+    VLOAD_log = log10(VLOAD + 1),
+    INCOME = as.numeric(as.factor(INCOME)),
+    BSEDUCTN = as.numeric(as.factor(BSEDUCTN)),
+    hcv = as.numeric(as.factor(hcv)),
+    BSCOCUSE = as.numeric(as.factor(BSCOCUSE)),
+    HAARTV2 = as.numeric(as.factor(HAARTV2))
+  )
+
+# Function to extract beta and p-value for time_to_haart_years
+extract_beta_p_adj <- function(model) {
+  out <- tryCatch({
+    beta <- coef(summary(model))["time_to_haart_years", "Estimate"]
+    pval <- coef(summary(model))["time_to_haart_years", "Pr(>|t|)"]
+    c(Beta = round(beta, 4), P_value = signif(pval, 3))
+  }, error = function(e) c(Beta = NA, P_value = NA))
+  return(out)
+}
+
+# List of CVD models
+cvd_models <- c("ascvdrisk", "preventascvd", "preventcvd", "preventhf")
+
+# Fit adjusted models
+lm_adj_results <- lapply(cvd_models, function(model) {
+  lm(
+    as.formula(paste(
+      model, "~ time_to_haart_years + CD4N_log + VLOAD_log + INCOME + BSEDUCTN + hcv + BSCOCUSE + HAARTV2"
+    )),
+    data = df_haart
+  )
+})
+
+# Extract results
+results_adj <- lapply(lm_adj_results, extract_beta_p_adj)
+
+# Create results table
+result_adj_table <- tibble(
+  Model = cvd_models,
+  Beta = sapply(results_adj, function(x) x["Beta"]),
+  P_value = sapply(results_adj, function(x) x["P_value"])
+)
+
+print(result_adj_table)
+
+****** Beta-coefficient are not included in the graphs ******
+
+
+# Define custom Y-axis labels in the desired order
+y_labels <- c(
+  "10-year ASCVD Risk",
+  "PREVENT ASCVD",
+  "PREVENT CVD",
+  "PREVENT HF"
+)
+
+# Create updated plots
+adj_model_plots <- pmap(
+  list(lm_adj_results, cvd_models, pval_labels, purple_colors, y_labels),
+  function(model, model_label, pval_text, line_color, y_lab) {
+    model_data <- model.frame(model)
+    
+    ggplot(model_data, aes(x = time_to_haart_years, y = get(model_label))) +
+      geom_point(alpha = 0.5, size = 0.3, color = "black") +
+      geom_smooth(method = "lm", se = TRUE, color = line_color) +
+      annotate("text", x = Inf, y = Inf, label = pval_text, hjust = 1.1, vjust = 1.3, size = 3.5, fontface = "italic") +
+      labs(
+        x = "Years From First Time Seropositive to Anti-retroviral Therapy Initiation",
+        y = y_lab
+      ) +
+      theme_minimal(base_size = 8) +
+      theme(plot.title = element_blank())
+  }
+)
+
+# Display in 2x2 grid
+grid.arrange(grobs = adj_model_plots, ncol = 2)
+
+
