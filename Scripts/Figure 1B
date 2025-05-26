@@ -95,3 +95,201 @@ ggplot(model_results, aes(x = estimate, y = risk_label, color = hiv_status, shap
     axis.title.x = element_text(size = 11),
     plot.title = element_text(hjust = 0.5)
   )
+--------------------------------------------------------------------------------------------------------------------------------
+Figure 1B (Right top panel - Post-BD FVC) 
+library(readxl)
+library(dplyr)
+library(broom)
+library(tidyr)
+library(ggplot2)
+library(forcats)
+
+# Load data
+df <- read_excel("C:/Users/USER/Desktop/Projects/ASCVD/Mateo Dataset/Fourth set of analysis/Mateo_GLI modified.xlsx")
+
+# Prepare and clean
+df <- df %>%
+  mutate(
+    gender_label = recode(as.character(gender), `1` = "MACS", `2` = "WIHS"),
+    hiv_label = ifelse(hiv == 1, "HIV+", "HIV-"),
+    CD4N_log = log(CD4N + 1),
+    VLOAD_log = log(VLOAD + 1),
+    INCOME = as.numeric(as.factor(INCOME)),
+    BSEDUCTN = as.numeric(as.factor(BSEDUCTN)),
+    hcv = as.numeric(as.factor(hcv)),
+    BSCOCUSE = as.numeric(as.factor(BSCOCUSE)),
+    HAARTV2 = as.numeric(as.factor(HAARTV2))
+  )
+
+# Model function (no duplicate columns)
+run_model <- function(risk_model, hiv_group, gender_group) {
+  df_sub <- df %>%
+    filter(hiv_label == hiv_group, gender_label == gender_group) %>%
+    drop_na(postfvc_pp, !!sym(risk_model))
+  
+  formula <- if (hiv_group == "HIV+") {
+    as.formula(paste(risk_model, "~ postfvc_pp + CD4N_log + VLOAD_log + INCOME + BSEDUCTN + hcv + BSCOCUSE + HAARTV2"))
+  } else {
+    as.formula(paste(risk_model, "~ postfvc_pp + INCOME + BSEDUCTN + hcv + BSCOCUSE"))
+  }
+  
+  model <- lm(formula, data = df_sub)
+  ci_vals <- confint(model)
+  tidy_out <- tidy(model) %>% filter(term == "postfvc_pp")
+  
+  tibble(
+    estimate = tidy_out$estimate,
+    conf.low = ci_vals["postfvc_pp", 1],
+    conf.high = ci_vals["postfvc_pp", 2],
+    p.value = tidy_out$p.value
+  )
+}
+
+# Run models
+risk_models <- c("ascvdrisk", "preventascvd", "preventcvd", "preventhf")
+hiv_groups <- c("HIV+", "HIV-")
+gender_groups <- c("MACS", "WIHS")
+
+model_results <- expand_grid(
+  risk_model = risk_models,
+  hiv_status = hiv_groups,
+  gender = gender_groups
+) %>%
+  mutate(result = pmap(list(risk_model, hiv_status, gender), run_model)) %>%
+  unnest(result)
+
+# Prepare for plotting
+model_results <- model_results %>%
+  mutate(
+    risk_label = recode(risk_model,
+                        ascvdrisk = "10-year ASCVD Risk",
+                        preventascvd = "PREVENT - ASCVD",
+                        preventcvd = "PREVENT - CVD",
+                        preventhf = "PREVENT - HF"),
+    shape = ifelse(gender == "MACS", 15, 16),
+    color = ifelse(hiv_status == "HIV+", "navy", "cornflowerblue"),
+    risk_label = factor(risk_label, levels = rev(c("10-year ASCVD Risk", "PREVENT - ASCVD", "PREVENT - CVD", "PREVENT - HF")))
+  )
+
+# Plot (no p-values)
+ggplot(model_results, aes(x = estimate, y = risk_label, color = hiv_status, shape = gender)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "gray60") +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high),
+                 height = 0.25, position = position_dodge(width = 0.6)) +
+  geom_point(size = 3, position = position_dodge(width = 0.6)) +
+  scale_color_manual(values = c("HIV+" = "navy", "HIV-" = "cornflowerblue")) +
+  scale_shape_manual(values = c("MACS" = 15, "WIHS" = 16)) +
+  labs(
+    title = "",
+    x = "Beta Coefficient (95% CI)",
+    y = NULL,
+    color = "HIV Status",
+    shape = "Cohort"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    axis.text.y = element_text(size = 12),
+    axis.title.x = element_text(size = 11),
+    plot.title = element_text(hjust = 0.5)
+  )
+--------------------------------------------------------------------------------------------------------------------------------
+Figure 1B (Left Bottom panel - Post-BD FEV1/FVC)
+library(readxl)
+library(dplyr)
+library(broom)
+library(tidyr)
+library(ggplot2)
+library(forcats)
+
+# Load data
+df <- read_excel("C:/Users/USER/Desktop/Projects/ASCVD/Mateo Dataset/Fourth set of analysis/Mateo_GLI modified.xlsx")
+
+# Prepare and clean
+df <- df %>%
+  mutate(
+    gender_label = recode(as.character(gender), `1` = "MACS", `2` = "WIHS"),
+    hiv_label = ifelse(hiv == 1, "HIV+", "HIV-"),
+    CD4N_log = log(CD4N + 1),
+    VLOAD_log = log(VLOAD + 1),
+    INCOME = as.numeric(as.factor(INCOME)),
+    BSEDUCTN = as.numeric(as.factor(BSEDUCTN)),
+    hcv = as.numeric(as.factor(hcv)),
+    BSCOCUSE = as.numeric(as.factor(BSCOCUSE)),
+    HAARTV2 = as.numeric(as.factor(HAARTV2))
+  )
+
+# Model function (no duplicate columns)
+run_model <- function(risk_model, hiv_group, gender_group) {
+  df_sub <- df %>%
+    filter(hiv_label == hiv_group, gender_label == gender_group) %>%
+    drop_na(postfev1fvc_pp, !!sym(risk_model))
+  
+  formula <- if (hiv_group == "HIV+") {
+    as.formula(paste(risk_model, "~ postfev1fvc_pp + CD4N_log + VLOAD_log + INCOME + BSEDUCTN + hcv + BSCOCUSE + HAARTV2"))
+  } else {
+    as.formula(paste(risk_model, "~ postfev1fvc_pp + INCOME + BSEDUCTN + hcv + BSCOCUSE"))
+  }
+  
+  model <- lm(formula, data = df_sub)
+  ci_vals <- confint(model)
+  tidy_out <- tidy(model) %>% filter(term == "postfev1fvc_pp")
+  
+  tibble(
+    estimate = tidy_out$estimate,
+    conf.low = ci_vals["postfev1fvc_pp", 1],
+    conf.high = ci_vals["postfev1fvc_pp", 2],
+    p.value = tidy_out$p.value
+  )
+}
+
+# Run models
+risk_models <- c("ascvdrisk", "preventascvd", "preventcvd", "preventhf")
+hiv_groups <- c("HIV+", "HIV-")
+gender_groups <- c("MACS", "WIHS")
+
+model_results <- expand_grid(
+  risk_model = risk_models,
+  hiv_status = hiv_groups,
+  gender = gender_groups
+) %>%
+  mutate(result = pmap(list(risk_model, hiv_status, gender), run_model)) %>%
+  unnest(result)
+
+# Prepare for plotting
+model_results <- model_results %>%
+  mutate(
+    risk_label = recode(risk_model,
+                        ascvdrisk = "10-year ASCVD Risk",
+                        preventascvd = "PREVENT - ASCVD",
+                        preventcvd = "PREVENT - CVD",
+                        preventhf = "PREVENT - HF"),
+    shape = ifelse(gender == "MACS", 15, 16),
+    color = ifelse(hiv_status == "HIV+", "navy", "cornflowerblue"),
+    risk_label = factor(risk_label, levels = rev(c("10-year ASCVD Risk", "PREVENT - ASCVD", "PREVENT - CVD", "PREVENT - HF")))
+  )
+
+# Plot (no p-values)
+ggplot(model_results, aes(x = estimate, y = risk_label, color = hiv_status, shape = gender)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "gray60") +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high),
+                 height = 0.25, position = position_dodge(width = 0.6)) +
+  geom_point(size = 3, position = position_dodge(width = 0.6)) +
+  scale_color_manual(values = c("HIV+" = "navy", "HIV-" = "cornflowerblue")) +
+  scale_shape_manual(values = c("MACS" = 15, "WIHS" = 16)) +
+  labs(
+    title = "",
+    x = "Beta Coefficient (95% CI)",
+    y = NULL,
+    color = "HIV Status",
+    shape = "Cohort"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    axis.text.y = element_text(size = 12),
+    axis.title.x = element_text(size = 11),
+    plot.title = element_text(hjust = 0.5)
+  )
+--------------------------------------------------------------------------------------------------------------------------------
+Figure 1B (Right Bottom panel - Post-BD Dlco)
