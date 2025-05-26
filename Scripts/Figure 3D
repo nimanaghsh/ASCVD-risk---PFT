@@ -1,0 +1,65 @@
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(ggpubr)
+
+# Prepare the data (HIV+ only, non-missing HAARTV2)
+df_haart <- df %>%
+  filter(hiv == 1, !is.na(HAARTV2)) %>%
+  mutate(HAARTV2 = factor(HAARTV2, levels = 0:5,
+                          labels = c(
+                            "Mono/Combo therapy",
+                            "PI-HAART",
+                            "NNRTI-HAART (no PI)",
+                            "II-HAART (no PI/NNRTI)",
+                            "All-NRTI-HAART",
+                            "Other/Uncertain (trial drug)"
+                          ))) %>%
+  pivot_longer(
+    cols = c("ascvdrisk", "preventascvd", "preventcvd", "preventhf"),
+    names_to = "Model", values_to = "Risk"
+  ) %>%
+  drop_na(Risk)
+
+# Drop facets with only one group (Kruskal-Wallis needs ≥2)
+df_haart_filtered <- df_haart %>%
+  group_by(Model) %>%
+  filter(n_distinct(HAARTV2) > 1) %>%
+  ungroup()
+
+# Labels for each risk model
+model_labels <- c(
+  ascvdrisk = "10-year ASCVD risk",
+  preventascvd = "PREVENT ASCVD",
+  preventcvd = "PREVENT CVD",
+  preventhf = "PREVENT HF"
+)
+
+# Plot
+ggplot(df_haart_filtered, aes(x = HAARTV2, y = Risk, color = HAARTV2)) +
+  geom_jitter(position = position_jitter(width = 0.2), alpha = 0.4, size = 0.4) +
+  geom_boxplot(outlier.shape = NA, width = 0.3, linewidth = 0.7, fill = NA) +
+  stat_compare_means(
+    method = "kruskal.test",
+    label = "p.format",
+    label.y.npc = "top",
+    size = 3.5
+  ) +
+  facet_wrap(~ Model, labeller = labeller(Model = model_labels), scales = "free_y") +
+  scale_color_manual(values = c(
+    "magenta3", "magenta4", "mediumpurple1", 
+    "mediumpurple2", "mediumpurple3", "mediumpurple4"
+  )) +
+  labs(
+    title = "CVD Risk Models by HAARTV2 Status (HIV+ Only)",
+    x = "HAARTV2 Regimen",
+    y = "Risk Score",
+    color = "HAARTV2"
+  ) +
+  theme_minimal() +
+  theme(
+    strip.text = element_text(face = "bold", size = 10),
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 9),
+    axis.text.y = element_text(size = 10),
+    legend.position = "none"
+  )
