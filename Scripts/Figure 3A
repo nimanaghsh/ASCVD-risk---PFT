@@ -1,0 +1,71 @@
+# Load libraries
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(broom)
+
+# Step 1: Load and preprocess data
+df <- read_excel("C:/Users/USER/Desktop/Projects/ASCVD/Mateo Dataset/Fourth set of analysis/Mateo_GLI modified.xlsx")
+
+df_hiv1 <- df %>%
+  filter(hiv == 1, CD4N > 0) %>%
+  mutate(
+    gender = factor(gender, labels = c("MACS", "WIHS")),
+    CD4N_log2 = log2(CD4N + 1),
+    VLOAD_log = log(VLOAD + 1),
+    INCOME = as.numeric(as.factor(INCOME)),
+    BSEDUCTN = as.numeric(as.factor(BSEDUCTN)),
+    hcv = as.numeric(as.factor(hcv)),
+    BSCOCUSE = as.numeric(as.factor(BSCOCUSE)),
+    HAARTV2 = as.numeric(as.factor(HAARTV2))
+  ) %>%
+  drop_na(CD4N_log2, gender, VLOAD_log, INCOME, BSEDUCTN, hcv, BSCOCUSE, HAARTV2,
+          ascvdrisk, preventascvd, preventcvd, preventhf)
+
+# Step 2: Define outcomes and storage
+risk_models <- c("ascvdrisk", "preventascvd", "preventcvd", "preventhf")
+plot_data <- data.frame()
+
+# Step 3: Adjusted models and predicted values
+for (outcome in risk_models) {
+  # MACS
+  macs <- df_hiv1 %>% filter(gender == "MACS")
+  macs_model <- lm(as.formula(paste(outcome, "~ CD4N_log2 + VLOAD_log + INCOME + BSEDUCTN + hcv + BSCOCUSE + HAARTV2")), data = macs)
+  macs_df <- macs %>%
+    mutate(predicted = predict(macs_model), outcome = outcome, group = "MACS")
+  
+  # WIHS
+  wihs <- df_hiv1 %>% filter(gender == "WIHS")
+  wihs_model <- lm(as.formula(paste(outcome, "~ CD4N_log2 + VLOAD_log + INCOME + BSEDUCTN + hcv + BSCOCUSE + HAARTV2")), data = wihs)
+  wihs_df <- wihs %>%
+    mutate(predicted = predict(wihs_model), outcome = outcome, group = "WIHS")
+  
+  # All
+  all_model <- lm(as.formula(paste(outcome, "~ CD4N_log2 + VLOAD_log + INCOME + BSEDUCTN + hcv + BSCOCUSE + HAARTV2")), data = df_hiv1)
+  all_df <- df_hiv1 %>%
+    mutate(predicted = predict(all_model), outcome = outcome, group = "All")
+  
+  # Combine
+  plot_data <- bind_rows(plot_data, macs_df, wihs_df, all_df)
+}
+
+ggplot(plot_data, aes(x = CD4N_log2, y = predicted, color = group)) +
+  geom_point(alpha = 0.3, size = 0.2) +
+  stat_smooth(method = "lm", se = FALSE, linewidth = 0.5, formula = y ~ x) +
+  facet_wrap(~ outcome, scales = "free_y",
+             labeller = labeller(outcome = c(
+               ascvdrisk = "10-year ASCVD Risk",
+               preventascvd = "PREVENT ASCVD",
+               preventcvd = "PREVENT CVD",
+               preventhf = "PREVENT HF"
+             ))) +
+  scale_color_manual(values = c("MACS" = "#9B59B6", "WIHS" = "#E91E63", "All" = "#00BCD4")) +
+  labs(
+    title = "Adjusted Linear Regression Model Between Normalized CD4 Count and CVD Risk Models",
+    x = "Normalized CD4 Number",
+    y = "Risk Score",
+    color = "Group"
+  ) +
+  theme_minimal()
+
+**** P-values calculated separately and manually added to the graphs ****
